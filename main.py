@@ -13,14 +13,25 @@ EXPORTER_PORT = 9115
 gauges = {}
 lock = threading.Lock()
 
+def run_init_cmds(cmd_list, tag="global"):
+    for cmd in cmd_list:
+        print(f"[INIT][{tag}] Running: {cmd}", file=sys.stderr)
+        try:
+            subprocess.run(cmd, shell=True, check=True)
+        except Exception as e:
+            print(f"Init failed [{tag}]: {e}", file=sys.stderr)
+
 def load_config():
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         cfg = yaml.safe_load(f)
     interval = cfg.get('interval', 300)
+    global_init = cfg.get('global_init', [])
     scripts = {}
+    script_init_map = {}
     for name, conf in cfg.get('scripts', {}).items():
         scripts[name] = conf['command']
-    return interval, scripts
+        script_init_map[name] = conf.get('init', [])
+    return interval, global_init, scripts, script_init_map
 
 def run_scripts(interval, scripts):
     while True:
@@ -44,12 +55,19 @@ def run_scripts(interval, scripts):
             time.sleep(sleep_time)
 
 def main():
-    interval, scripts = load_config()
-    # 先启动Prometheus HTTP
+    interval, global_init, scripts, script_init_map = load_config()
+    # 1. 运行全局初始化
+    if global_init:
+        run_init_cmds(global_init, tag="global")
+    # 2. 逐脚本初始化
+    for name, init_cmds in script_init_map.items():
+        if init_cmds:
+            run_init_cmds(init_cmds, tag=name)
+    # 3. 启动Prometheus HTTP
     start_http_server(EXPORTER_PORT)
-    # 后台定时采集
+    # 4. 定时执行采集脚本
     threading.Thread(target=run_scripts, args=(interval, scripts), daemon=True).start()
-    # 主线程阻塞，保证进程不退出
+    # 5. 主线程阻塞
     while True:
         time.sleep(3600)
 
