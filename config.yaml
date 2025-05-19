@@ -1,0 +1,18 @@
+interval: 60
+
+global_init:
+  - "apt-get update && apt-get install -y jq"
+  - "pip install --upgrade pip"
+
+scripts:
+  scriptA:
+    command: ["python3", "/scripts/script_a.py"]
+    init:
+      - "pip install -r /scripts/requirements_a.txt"
+  scriptB:
+    command: ["node", "/scripts/script_b.js"]
+    init:
+      - "npm install --prefix /scripts/script_b_dir"
+  scriptC:
+    command: ["bash", "/scripts/script_c.sh"]
+    init: []
